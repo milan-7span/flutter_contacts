@@ -11,6 +11,9 @@ class ContactsService {
   static const MethodChannel _channel =
       MethodChannel('github.com/clovisnicolas/flutter_contacts');
 
+  static const _addProgressStream =
+      const EventChannel('github.com/clovisnicolas/add_progress');
+
   /// Fetches all contacts, or when specified, the contacts with a name
   /// matching [query]
   static Future<Iterable<Contact>> getContacts(
@@ -82,6 +85,10 @@ class ContactsService {
   /// Adds the [contact] to the device contact list
   static Future addContact(Contact contact) =>
       _channel.invokeMethod('addContact', Contact._toMap(contact));
+
+  static Stream<int> addContacts(List<Contact> contact) =>
+      Stream.castFrom(_addProgressStream.receiveBroadcastStream(
+          contact.map((e) => Contact._toMap(e)).toList()));
 
   /// Deletes the [contact] if it has a valid identifier
   static Future deleteContact(Contact contact) =>

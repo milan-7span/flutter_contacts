@@ -1,6 +1,7 @@
 package flutter.plugins.contactsservice.contactsservice;
 
 import android.annotation.TargetApi;
+import android.app.Activity;
 import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -37,6 +38,8 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.EventChannel.EventSink;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
@@ -60,6 +63,8 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
     private ContentResolver contentResolver;
     private MethodChannel methodChannel;
     private BaseContactsServiceDelegate delegate;
+    private EventChannel channel;
+    private Activity mActivity;
 
     private final ExecutorService executor =
             new ThreadPoolExecutor(0, 10, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1000));
@@ -77,6 +82,28 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
     private void initInstance(BinaryMessenger messenger, Context context) {
         methodChannel = new MethodChannel(messenger, "github.com/clovisnicolas/flutter_contacts");
         methodChannel.setMethodCallHandler(this);
+        channel = new EventChannel(messenger, "github.com/clovisnicolas/add_progress");
+        channel.setStreamHandler(
+                new EventChannel.StreamHandler() {
+                    @Override
+                    public void onListen(Object args, final EventSink events) {
+                        Log.e(LOG_TAG, "onListen*******");
+                        ArrayList<HashMap> contactsMap = (ArrayList<HashMap>) args;
+                        ArrayList<Contact> contacts = new ArrayList<>();
+                        for (int i = 0; i < contactsMap.size(); i++) {
+                            contacts.add(Contact.fromMap(contactsMap.get(i)));
+                        }
+                        mAddContactTask = new AddContactsTask(contacts, contentResolver, events, mActivity);
+                        mAddContactTask.execute();
+                    }
+
+                    @Override
+                    public void onCancel(Object args) {
+                        Log.e(LOG_TAG, "Cancelled*******");
+                        mAddContactTask.cancel(true);
+                    }
+                }
+        );
         this.contentResolver = context.getContentResolver();
     }
 
@@ -117,6 +144,15 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                 } else {
                     result.error(null, "Failed to add the contact", null);
                 }
+                break;
+            }
+            case "addContacts": {
+                ArrayList<HashMap> contactsMap = (ArrayList<HashMap>) call.arguments;
+                ArrayList<Contact> contacts = new ArrayList<>();
+                for (int i = 0; i < contactsMap.size(); i++) {
+                    contacts.add(Contact.fromMap(contactsMap.get(i)));
+                }
+                this.addContacts(contacts);
                 break;
             }
             case "deleteContact": {
@@ -215,6 +251,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
     @Override
     public void onAttachedToActivity(ActivityPluginBinding binding) {
         if (delegate instanceof ContactServiceDelegate) {
+            mActivity = binding.getActivity();
             ((ContactServiceDelegate) delegate).bindToActivity(binding);
         }
     }
@@ -678,101 +715,127 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
         }
     }
 
-    private boolean addContact(Contact contact) {
+    AddContactsTask mAddContactTask;
 
+    private void addContacts(final ArrayList<Contact> contacts) {
+
+    }
+
+    private boolean addContact(Contact contact) {
         ArrayList<ContentProviderOperation> ops = new ArrayList<>();
 
-        ContentProviderOperation.Builder op = ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
-                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
-                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null);
-        ops.add(op.build());
-
-        op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-                .withValue(StructuredName.GIVEN_NAME, contact.givenName)
-                .withValue(StructuredName.MIDDLE_NAME, contact.middleName)
-                .withValue(StructuredName.FAMILY_NAME, contact.familyName)
-                .withValue(StructuredName.PREFIX, contact.prefix)
-                .withValue(StructuredName.SUFFIX, contact.suffix);
-        ops.add(op.build());
-
-        op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Note.CONTENT_ITEM_TYPE)
-                .withValue(CommonDataKinds.Note.NOTE, contact.note);
-        ops.add(op.build());
-
-        op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Organization.CONTENT_ITEM_TYPE)
-                .withValue(Organization.COMPANY, contact.company)
-                .withValue(Organization.TITLE, contact.jobTitle);
-        ops.add(op.build());
-
-        //Photo
-        op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                .withValue(ContactsContract.Data.IS_SUPER_PRIMARY, 1)
-                .withValue(ContactsContract.CommonDataKinds.Photo.PHOTO, contact.avatar)
-                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE);
-        ops.add(op.build());
-
-        op.withYieldAllowed(true);
-
-        //Phones
-        for (Item phone : contact.phones) {
-            op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                    .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone.value);
-
-            if (Item.stringToPhoneType(phone.label) == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM) {
-                op.withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.BaseTypes.TYPE_CUSTOM);
-                op.withValue(ContactsContract.CommonDataKinds.Phone.LABEL, phone.label);
-            } else
-                op.withValue(ContactsContract.CommonDataKinds.Phone.TYPE, Item.stringToPhoneType(phone.label));
-
-            ops.add(op.build());
-        }
-
-        //Emails
-        for (Item email : contact.emails) {
-            op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Email.CONTENT_ITEM_TYPE)
-                    .withValue(CommonDataKinds.Email.ADDRESS, email.value)
-                    .withValue(CommonDataKinds.Email.TYPE, Item.stringToEmailType(email.label));
-            ops.add(op.build());
-        }
-        //Postal addresses
-        for (PostalAddress address : contact.postalAddresses) {
-            op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE)
-                    .withValue(CommonDataKinds.StructuredPostal.TYPE, PostalAddress.stringToPostalAddressType(address.label))
-                    .withValue(CommonDataKinds.StructuredPostal.LABEL, address.label)
-                    .withValue(CommonDataKinds.StructuredPostal.STREET, address.street)
-                    .withValue(CommonDataKinds.StructuredPostal.CITY, address.city)
-                    .withValue(CommonDataKinds.StructuredPostal.REGION, address.region)
-                    .withValue(CommonDataKinds.StructuredPostal.POSTCODE, address.postcode)
-                    .withValue(CommonDataKinds.StructuredPostal.COUNTRY, address.country);
-            ops.add(op.build());
-        }
-
-        // Birthday
-        op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Event.CONTENT_ITEM_TYPE)
-                .withValue(CommonDataKinds.Event.TYPE, CommonDataKinds.Event.TYPE_BIRTHDAY)
-                .withValue(CommonDataKinds.Event.START_DATE, contact.birthday);
-        ops.add(op.build());
+        addSingleContact(contact, ops, 0);
 
         try {
             contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private static void addSingleContact(Contact contact, ArrayList<ContentProviderOperation> ops, int index) {
+        int id = ops.size();
+
+        ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                .build());
+
+
+        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                .withValue(ContactsContract.Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
+                .withValue(StructuredName.GIVEN_NAME, contact.givenName)
+                //.withValue(StructuredName.MIDDLE_NAME, contact.middleName)
+                //.withValue(StructuredName.FAMILY_NAME, contact.familyName)
+                //.withValue(StructuredName.PREFIX, contact.prefix)
+                //.withValue(StructuredName.SUFFIX, contact.suffix)
+                .build());
+
+
+        if (contact.note != null && !contact.note.isEmpty()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Note.CONTENT_ITEM_TYPE)
+                    .withValue(CommonDataKinds.Note.NOTE, contact.note).build());
+        }
+
+        if ((contact.company != null && !contact.company.isEmpty()) || (contact.jobTitle != null && !contact.jobTitle.isEmpty())) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                    .withValue(ContactsContract.Data.MIMETYPE, Organization.CONTENT_ITEM_TYPE)
+                    .withValue(Organization.COMPANY, contact.company)
+                    .withValue(Organization.TITLE, contact.jobTitle).build());
+        }
+
+        //Photo
+        if (contact.avatar != null && contact.avatar.length > 0) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                    .withValue(ContactsContract.Data.IS_SUPER_PRIMARY, 1)
+                    .withValue(CommonDataKinds.Photo.PHOTO, contact.avatar)
+                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Photo.CONTENT_ITEM_TYPE).build());
+        }
+
+        //op.withYieldAllowed(true);
+
+        //Phones
+        if (contact.phones != null && contact.phones.size() > 0) {
+            for (Item phone : contact.phones) {
+                ContentProviderOperation.Builder op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                        .withValue(ContactsContract.Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE)
+                        .withValue(Phone.NUMBER, phone.value)
+                        .withValue(
+                                ContactsContract.CommonDataKinds.Phone.TYPE,
+                                ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                        );
+
+              /*if (Item.stringToPhoneType(phone.label) == Phone.TYPE_CUSTOM) {
+                  op.withValue(Phone.TYPE, CommonDataKinds.BaseTypes.TYPE_CUSTOM);
+                  op.withValue(Phone.LABEL, phone.label);
+              } else
+                  op.withValue(Phone.TYPE, Item.stringToPhoneType(phone.label));*/
+
+                ops.add(op.build());
+            }
+        }
+
+        //Emails
+        if (contact.emails != null && contact.emails.size() > 0) {
+            for (Item email : contact.emails) {
+                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                        .withValue(ContactsContract.Data.MIMETYPE, Email.CONTENT_ITEM_TYPE)
+                        .withValue(Email.ADDRESS, email.value)
+                        .withValue(Email.TYPE, Item.stringToEmailType(email.label)).build());
+            }
+        }
+
+        //Postal addresses
+        if (contact.postalAddresses != null && contact.postalAddresses.size() > 0) {
+            for (PostalAddress address : contact.postalAddresses) {
+                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                        .withValue(ContactsContract.Data.MIMETYPE, StructuredPostal.CONTENT_ITEM_TYPE)
+                        .withValue(StructuredPostal.TYPE, PostalAddress.stringToPostalAddressType(address.label))
+                        .withValue(StructuredPostal.LABEL, address.label)
+                        .withValue(StructuredPostal.STREET, address.street)
+                        .withValue(StructuredPostal.CITY, address.city)
+                        .withValue(StructuredPostal.REGION, address.region)
+                        .withValue(StructuredPostal.POSTCODE, address.postcode)
+                        .withValue(StructuredPostal.COUNTRY, address.country).build());
+            }
+        }
+
+        // Birthday
+        if (contact.birthday != null && !contact.birthday.isEmpty()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, id)
+                    .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Event.CONTENT_ITEM_TYPE)
+                    .withValue(CommonDataKinds.Event.TYPE, CommonDataKinds.Event.TYPE_BIRTHDAY)
+                    .withValue(CommonDataKinds.Event.START_DATE, contact.birthday).build());
         }
     }
 
@@ -909,4 +972,51 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
         }
     }
 
+    private static class AddContactsTask extends AsyncTask<Void, Void, Void> {
+        ArrayList<Contact> contacts;
+        ContentResolver contentResolver;
+        EventSink events;
+        Activity activity;
+
+        public AddContactsTask(ArrayList<Contact> contacts,
+                               ContentResolver contentResolver,
+                               EventSink events, Activity activity) {
+            this.contacts = contacts;
+            this.contentResolver = contentResolver;
+            this.events = events;
+            this.activity = activity;
+        }
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            int batchSize = 30;
+            ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+            for (int i = 0; i < contacts.size(); i++) {
+                if (isCancelled()) {
+                    Log.e(LOG_TAG, "Task is cancelled, aborting!!");
+                    break;
+                }
+                Contact contact = contacts.get(i);
+                addSingleContact(contact, ops, i);
+
+                if (ops.size() >= batchSize || i == contacts.size() - 1) {
+                    try {
+                        contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+                        ops.clear();
+                        final int finalI = i;
+                        activity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                events.success(finalI + 1);
+                            }
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            return null;
+        }
+    }
 }
