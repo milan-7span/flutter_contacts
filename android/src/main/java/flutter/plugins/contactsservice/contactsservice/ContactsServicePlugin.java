@@ -65,6 +65,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
     private BaseContactsServiceDelegate delegate;
     private EventChannel channel;
     private Activity mActivity;
+    AddContactsTask mAddContactTask;
 
     private final ExecutorService executor =
             new ThreadPoolExecutor(0, 10, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1000));
@@ -144,15 +145,6 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                 } else {
                     result.error(null, "Failed to add the contact", null);
                 }
-                break;
-            }
-            case "addContacts": {
-                ArrayList<HashMap> contactsMap = (ArrayList<HashMap>) call.arguments;
-                ArrayList<Contact> contacts = new ArrayList<>();
-                for (int i = 0; i < contactsMap.size(); i++) {
-                    contacts.add(Contact.fromMap(contactsMap.get(i)));
-                }
-                this.addContacts(contacts);
                 break;
             }
             case "deleteContact": {
@@ -713,12 +705,6 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
             Log.e(LOG_TAG, ex.getMessage());
             return null;
         }
-    }
-
-    AddContactsTask mAddContactTask;
-
-    private void addContacts(final ArrayList<Contact> contacts) {
-
     }
 
     private boolean addContact(Contact contact) {
