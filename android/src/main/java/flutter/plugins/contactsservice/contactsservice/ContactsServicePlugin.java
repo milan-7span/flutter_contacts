@@ -64,8 +64,10 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
     private MethodChannel methodChannel;
     private BaseContactsServiceDelegate delegate;
     private EventChannel channel;
+    private EventChannel updateChannel;
     private Activity mActivity;
     AddContactsTask mAddContactTask;
+    UpdateContactsTask mUpdateContactsTask;
 
     private final ExecutorService executor =
             new ThreadPoolExecutor(0, 10, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1000));
@@ -102,6 +104,27 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                     public void onCancel(Object args) {
                         Log.e(LOG_TAG, "Cancelled*******");
                         mAddContactTask.cancel(true);
+                    }
+                }
+        );
+
+        updateChannel = new EventChannel(messenger, "github.com/clovisnicolas/update_progress");
+        updateChannel.setStreamHandler(
+                new EventChannel.StreamHandler() {
+                    @Override
+                    public void onListen(Object args, final EventSink events) {
+                        ArrayList<HashMap> contactsMap = (ArrayList<HashMap>) args;
+                        ArrayList<Contact> contacts = new ArrayList<>();
+                        for (int i = 0; i < contactsMap.size(); i++) {
+                            contacts.add(Contact.fromMap(contactsMap.get(i)));
+                        }
+                        mUpdateContactsTask = new UpdateContactsTask(contacts, contentResolver, events, mActivity);
+                        mUpdateContactsTask.execute();
+                    }
+
+                    @Override
+                    public void onCancel(Object args) {
+                        mUpdateContactsTask.cancel(true);
                     }
                 }
         );
@@ -825,6 +848,42 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
         }
     }
 
+    private static void updateSingleContact(Contact contact, ArrayList<ContentProviderOperation> ops, ContentResolver contentResolver) {
+        ContentProviderOperation.Builder op;
+
+        String rawId = getRawContactId(contact.identifier, contentResolver);
+        if (rawId == null) return;
+
+        // Update data (name)
+        op = ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(ContactsContract.Data.CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                        new String[]{String.valueOf(contact.identifier), ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE})
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.givenName);
+        ops.add(op.build());
+
+        if (contact.emails != null && contact.emails.size() > 0) {
+            for (Item email : contact.emails) {
+                op = ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                                new String[]{rawId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE})
+                        .withValue(Email.ADDRESS, email.value)
+                        .withValue(Email.TYPE, Item.stringToEmailType(email.label));
+
+                ops.add(op.build());
+            }
+        }
+
+        if (contact.company != null && !contact.company.isEmpty()) {
+            op = ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                            new String[]{rawId, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE})
+                    .withValue(Organization.COMPANY, contact.company)
+                    .withValue(Organization.TITLE, contact.jobTitle);
+
+            ops.add(op.build());
+        }
+    }
+
     private boolean deleteContact(Contact contact) {
         ArrayList<ContentProviderOperation> ops = new ArrayList<>();
         ops.add(ContentProviderOperation.newDelete(ContactsContract.RawContacts.CONTENT_URI)
@@ -1004,5 +1063,69 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
             }
             return null;
         }
+    }
+
+    private static class UpdateContactsTask extends AsyncTask<Void, Void, Void> {
+        ArrayList<Contact> contacts;
+        ContentResolver contentResolver;
+        EventSink events;
+        Activity activity;
+
+        public UpdateContactsTask(ArrayList<Contact> contacts,
+                                  ContentResolver contentResolver,
+                                  EventSink events, Activity activity) {
+            this.contacts = contacts;
+            this.contentResolver = contentResolver;
+            this.events = events;
+            this.activity = activity;
+        }
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            int batchSize = 30;
+            ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+            for (int i = 0; i < contacts.size(); i++) {
+                if (isCancelled()) {
+                    Log.e(LOG_TAG, "Task is cancelled, aborting!!");
+                    break;
+                }
+                Contact contact = contacts.get(i);
+                updateSingleContact(contact, ops, contentResolver);
+
+                if (ops.size() >= batchSize || i == contacts.size() - 1) {
+                    try {
+                        contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+                        ops.clear();
+                        final int finalI = i;
+                        activity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                events.success(finalI + 1);
+                            }
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            return null;
+        }
+    }
+
+    public static String getRawContactId(String contactId, ContentResolver contentResolver) {
+        String res = null;
+        Uri uri = ContactsContract.RawContacts.CONTENT_URI;
+        String[] projection = new String[]{ContactsContract.RawContacts._ID};
+        String selection = ContactsContract.RawContacts.CONTACT_ID + " = ?";
+        String[] selectionArgs = new String[]{contactId};
+        Cursor c = contentResolver.query(uri, projection, selection, selectionArgs, null);
+
+        if (c != null && c.moveToFirst()) {
+            res = c.getString(c.getColumnIndex(ContactsContract.RawContacts._ID));
+            c.close();
+        }
+
+        return res;
     }
 }

@@ -14,6 +14,9 @@ class ContactsService {
   static const _addProgressStream =
       const EventChannel('github.com/clovisnicolas/add_progress');
 
+  static const _updateProgressStream =
+      const EventChannel('github.com/clovisnicolas/update_progress');
+
   /// Fetches all contacts, or when specified, the contacts with a name
   /// matching [query]
   static Future<Iterable<Contact>> getContacts(
@@ -88,6 +91,11 @@ class ContactsService {
 
   static Stream<int> addContacts(List<Contact> contact) =>
       Stream.castFrom(_addProgressStream.receiveBroadcastStream(
+          contact.map((e) => Contact._toMap(e)).toList()));
+
+  /// Updates the [contacts] in batch if they have a valid identifier
+  static Stream<int> updateContacts(List<Contact> contact) =>
+      Stream.castFrom(_updateProgressStream.receiveBroadcastStream(
           contact.map((e) => Contact._toMap(e)).toList()));
 
   /// Deletes the [contact] if it has a valid identifier
