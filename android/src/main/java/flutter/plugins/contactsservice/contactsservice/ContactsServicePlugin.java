@@ -861,11 +861,16 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                 .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.givenName);
         ops.add(op.build());
 
+        op = ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                        new String[]{rawId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE});
+        ops.add(op.build());
+
         if (contact.emails != null && contact.emails.size() > 0) {
             for (Item email : contact.emails) {
-                op = ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-                        .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
-                                new String[]{rawId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE})
+                op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+                        .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
                         .withValue(Email.ADDRESS, email.value)
                         .withValue(Email.TYPE, Item.stringToEmailType(email.label));
 
@@ -873,10 +878,15 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
             }
         }
 
+        op = ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
+                        new String[]{rawId, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE});
+        ops.add(op.build());
+
         if (contact.company != null && !contact.company.isEmpty()) {
-            op = ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-                    .withSelection(ContactsContract.Data.RAW_CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
-                            new String[]{rawId, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE})
+            op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                    .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+                    .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE)
                     .withValue(Organization.COMPANY, contact.company)
                     .withValue(Organization.TITLE, contact.jobTitle);
 
