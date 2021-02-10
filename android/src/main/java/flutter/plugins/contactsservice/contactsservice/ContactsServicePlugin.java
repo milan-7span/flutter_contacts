@@ -757,6 +757,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                 .withValue(ContactsContract.Data.MIMETYPE, StructuredName.CONTENT_ITEM_TYPE)
                 .withValue(StructuredName.GIVEN_NAME, contact.givenName)
                 .withValue(StructuredName.FAMILY_NAME, contact.familyName)
+                .withValue(StructuredName.MIDDLE_NAME, contact.middleName)
                 //.withValue(StructuredName.MIDDLE_NAME, contact.middleName)
                 //.withValue(StructuredName.FAMILY_NAME, contact.familyName)
                 //.withValue(StructuredName.PREFIX, contact.prefix)
@@ -860,7 +861,8 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
                 .withSelection(ContactsContract.Data.CONTACT_ID + "=? AND " + ContactsContract.Data.MIMETYPE + "=?",
                         new String[]{String.valueOf(contact.identifier), ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE})
                 .withValue(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, contact.givenName)
-                .withValue(StructuredName.FAMILY_NAME, contact.familyName);
+                .withValue(StructuredName.FAMILY_NAME, contact.familyName)
+                .withValue(StructuredName.MIDDLE_NAME, contact.middleName);
         ops.add(op.build());
 
         op = ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
