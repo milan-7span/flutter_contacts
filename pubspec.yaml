@@ -13,9 +13,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  collection: ^1.14.11
-  quiver: '>=2.0.0 <3.0.0'
-
+  collection: ^1.15.0
+  quiver: ^3.0.1+1
 flutter:
   plugin:
     androidPackage: flutter.plugins.contactsservice.contactsservice
