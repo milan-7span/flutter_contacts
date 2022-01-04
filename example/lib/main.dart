@@ -5,6 +5,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:contacts_service_example/contacts_list_page.dart';
 import 'package:contacts_service_example/contacts_picker_page.dart';
 
+import 'contacts_list_page.dart';
+import 'contacts_picker_page.dart';
+
 void main() => runApp(ContactsExampleApp());
 
 // iOS only: Localized labels language setting is equal to CFBundleDevelopmentRegion value (Info.plist) of the iOS project
@@ -37,6 +40,7 @@ class _HomePageState extends State<HomePage> {
     _askPermissions();
   }
 
+
   Future<void> _askPermissions() async {
     PermissionStatus permissionStatus = await _getContactPermission();
     if (permissionStatus != PermissionStatus.granted) {
@@ -44,16 +48,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<PermissionStatus> _getContactPermission() async {
-    PermissionStatus permission = await PermissionHandler()
-        .checkPermissionStatus(PermissionGroup.contacts);
-    if (permission != PermissionStatus.granted &&
-        permission != PermissionStatus.disabled) {
-      Map<PermissionGroup, PermissionStatus> permissionStatus =
-          await PermissionHandler()
-              .requestPermissions([PermissionGroup.contacts]);
-      return permissionStatus[PermissionGroup.contacts] ??
-          PermissionStatus.unknown;
+  Future<Object> _getContactPermission() async {
+    Permission permission = Permission.contacts;
+    PermissionStatus permissionStatus = await permission.status;
+    if (permissionStatus != PermissionStatus.granted && permissionStatus != PermissionStatus.restricted) {
+      PermissionStatus permissionStatus = await permission.request();
+      return permissionStatus;
     } else {
       return permission;
     }
@@ -61,17 +61,12 @@ class _HomePageState extends State<HomePage> {
 
   void _handleInvalidPermissions(PermissionStatus permissionStatus) {
     if (permissionStatus == PermissionStatus.denied) {
-      throw PlatformException(
-          code: "PERMISSION_DENIED",
-          message: "Access to location data denied",
-          details: null);
-    } else if (permissionStatus == PermissionStatus.disabled) {
-      throw PlatformException(
-          code: "PERMISSION_DISABLED",
-          message: "Location data is not available on device",
-          details: null);
+      throw PlatformException(code: "PERMISSION_DENIED", message: "Access to location data denied", details: null);
+    } else if (permissionStatus == PermissionStatus.restricted) {
+      throw PlatformException(code: "PERMISSION_DISABLED", message: "Location data is not available on device", details: null);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -81,11 +76,11 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            RaisedButton(
+            ElevatedButton(
               child: const Text('Contacts list'),
               onPressed: () => Navigator.pushNamed(context, '/contactsList'),
             ),
-            RaisedButton(
+            ElevatedButton(
               child: const Text('Native Contacts picker'),
               onPressed: () =>
                   Navigator.pushNamed(context, '/nativeContactPicker'),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:contacts_service_example/main.dart';
+
 
 import 'package:contacts_service/contacts_service.dart';
 import 'package:intl/intl.dart';
+
+import 'main.dart';
 
 class ContactListPage extends StatefulWidget {
   @override
@@ -323,7 +325,7 @@ class _AddContactPageState extends State<AddContactPage> {
       appBar: AppBar(
         title: Text("Add a contact"),
         actions: <Widget>[
-          FlatButton(
+          ElevatedButton(
             onPressed: () {
               _formKey.currentState.save();
               contact.postalAddresses = [address];

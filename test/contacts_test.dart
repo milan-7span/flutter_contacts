@@ -40,8 +40,8 @@ void main() {
     expect(contacts.length, 2);
     expect(contacts, everyElement(isInstanceOf<Contact>()));
     expect(contacts.toList()[0].givenName, 'givenName1');
-    expect(contacts.toList()[1].postalAddresses.toList()[0].label, 'label');
-    expect(contacts.toList()[1].emails.toList()[0].label, 'label');
+    expect(contacts.toList()[1].postalAddresses!.toList()[0].label, 'label');
+    expect(contacts.toList()[1].emails!.toList()[0].label, 'label');
     expect(contacts.toList()[1].birthday, DateTime(1994, 2, 1));
   });
 
