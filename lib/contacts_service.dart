@@ -44,7 +44,7 @@ class ContactsService {
       'photoHighResolution': photoHighResolution,
       'orderByGivenName': orderByGivenName,
       'iOSLocalizedLabels': iOSLocalizedLabels,
-    }) as Future<Iterable<Contact>>);
+    }));
     return contacts.map((m) => Contact.fromMap(m));
   }
 
