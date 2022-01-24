@@ -16,7 +16,7 @@ class ContactsService {
 
   /// Fetches all contacts, or when specified, the contacts with a name
   /// matching [query]
-  static Future<Iterable<Contact>> getContacts(
+  static Future<dynamic> getContacts(
       {String? query,
         bool withThumbnails = true,
         bool photoHighResolution = true,
@@ -34,7 +34,7 @@ class ContactsService {
 
   /// Fetches all contacts, or when specified, the contacts with the phone
   /// matching [phone]
-  static Future<Iterable<Contact>> getContactsForPhone(String phone,
+  static Future<dynamic> getContactsForPhone(String phone,
       {bool withThumbnails = true, bool photoHighResolution = true, bool orderByGivenName = true, bool iOSLocalizedLabels = true}) async {
     if (phone == null || phone.isEmpty) return Iterable.empty();
 
@@ -51,7 +51,7 @@ class ContactsService {
   /// Fetches all contacts, or when specified, the contacts with the email
   /// matching [email]
   /// Works only on iOS
-  static Future<Iterable<Contact>> getContactsForEmail(String email,
+  static Future<dynamic> getContactsForEmail(String email,
       {bool withThumbnails = true, bool photoHighResolution = true, bool orderByGivenName = true, bool iOSLocalizedLabels = true}) async {
     Iterable contacts = await (_channel.invokeMethod('getContactsForEmail', <String, dynamic>{
       'email': email,
@@ -59,7 +59,7 @@ class ContactsService {
       'photoHighResolution': photoHighResolution,
       'orderByGivenName': orderByGivenName,
       'iOSLocalizedLabels': iOSLocalizedLabels,
-    }) as FutureOr<Iterable<dynamic>>);
+    }));
     return contacts.map((m) => Contact.fromMap(m));
   }
 
@@ -95,7 +95,7 @@ class ContactsService {
     return _handleFormOperation(result);
   }
 
-  static Future<Contact> openExistingContact(Contact contact, {bool iOSLocalizedLabels = true}) async {
+  static Future<dynamic> openExistingContact(Contact contact, {bool iOSLocalizedLabels = true}) async {
     dynamic result = await _channel.invokeMethod(
       'openExistingContact',
       <String, dynamic>{
@@ -107,7 +107,7 @@ class ContactsService {
   }
 
   // Displays the device/native contact picker dialog and returns the contact selected by the user
-  static Future<Contact?> openDeviceContactPicker({bool iOSLocalizedLabels = true}) async {
+  static Future<dynamic> openDeviceContactPicker({bool iOSLocalizedLabels = true}) async {
     dynamic result = await _channel.invokeMethod('openDeviceContactPicker', <String, dynamic>{
       'iOSLocalizedLabels': iOSLocalizedLabels,
     });
@@ -123,7 +123,7 @@ class ContactsService {
     return _handleFormOperation(result);
   }
 
-  static Contact _handleFormOperation(dynamic result) {
+  static dynamic _handleFormOperation(dynamic result) {
     if (result is int) {
       switch (result) {
         case 1:
