@@ -40,7 +40,6 @@ class _HomePageState extends State<HomePage> {
     _askPermissions();
   }
 
-
   Future<void> _askPermissions() async {
     PermissionStatus permissionStatus = await _getContactPermission();
     if (permissionStatus != PermissionStatus.granted) {
@@ -48,25 +47,35 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<Object> _getContactPermission() async {
+  Future<PermissionStatus> _getContactPermission() async {
     Permission permission = Permission.contacts;
     PermissionStatus permissionStatus = await permission.status;
-    if (permissionStatus != PermissionStatus.granted && permissionStatus != PermissionStatus.restricted) {
+    if (permissionStatus != PermissionStatus.granted &&
+        permissionStatus != PermissionStatus.restricted) {
       PermissionStatus permissionStatus = await permission.request();
       return permissionStatus;
     } else {
-      return permission;
+      return PermissionStatus.denied;
     }
   }
 
   void _handleInvalidPermissions(PermissionStatus permissionStatus) {
-    if (permissionStatus == PermissionStatus.denied) {
-      throw PlatformException(code: "PERMISSION_DENIED", message: "Access to location data denied", details: null);
-    } else if (permissionStatus == PermissionStatus.restricted) {
-      throw PlatformException(code: "PERMISSION_DISABLED", message: "Location data is not available on device", details: null);
+    try {
+      if (permissionStatus == PermissionStatus.denied) {
+        throw PlatformException(
+            code: "PERMISSION_DENIED",
+            message: "Access to location data denied",
+            details: null);
+      } else if (permissionStatus == PermissionStatus.restricted) {
+        throw PlatformException(
+            code: "PERMISSION_DISABLED",
+            message: "Location data is not available on device",
+            details: null);
+      }
+    } catch (e) {
+      print('e: $e');
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

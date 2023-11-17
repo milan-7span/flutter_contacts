@@ -1,5 +1,6 @@
 package flutter.plugins.contactsservice.contactsservice;
 
+import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.ContentProviderOperation;
@@ -563,6 +564,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
         return contentResolver.query(ContactsContract.Data.CONTENT_URI, PROJECTION, selection, selectionArgs.toArray(new String[selectionArgs.size()]), null);
     }
 
+    @SuppressLint("Range")
     private Cursor getCursorForPhone(String phone) {
         if (phone.isEmpty())
             return null;
@@ -593,6 +595,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
      * @param cursor
      * @return the list of contacts
      */
+    @SuppressLint("Range")
     private ArrayList<Contact> getContactsFrom(Cursor cursor) {
         HashMap<String, Contact> map = new LinkedHashMap<>();
 
@@ -624,17 +627,17 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
             }
             //PHONES
             else if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-                String phoneNumber = cursor.getString(cursor.getColumnIndex(Phone.NUMBER));
+                @SuppressLint("Range") String phoneNumber = cursor.getString(cursor.getColumnIndex(Phone.NUMBER));
                 if (!TextUtils.isEmpty(phoneNumber)) {
-                    int type = cursor.getInt(cursor.getColumnIndex(Phone.TYPE));
+                    @SuppressLint("Range") int type = cursor.getInt(cursor.getColumnIndex(Phone.TYPE));
                     String label = Item.getPhoneLabel(type, cursor);
                     contact.phones.add(new Item(label, phoneNumber));
                 }
             }
             //MAILS
             else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-                String email = cursor.getString(cursor.getColumnIndex(Email.ADDRESS));
-                int type = cursor.getInt(cursor.getColumnIndex(Email.TYPE));
+                @SuppressLint("Range") String email = cursor.getString(cursor.getColumnIndex(Email.ADDRESS));
+                @SuppressLint("Range") int type = cursor.getInt(cursor.getColumnIndex(Email.TYPE));
                 if (!TextUtils.isEmpty(email)) {
                     contact.emails.add(new Item(Item.getEmailLabel(type, cursor), email));
                 }
@@ -1127,6 +1130,7 @@ public class ContactsServicePlugin implements MethodCallHandler, FlutterPlugin, 
         }
     }
 
+    @SuppressLint("Range")
     public static String getRawContactId(String contactId, ContentResolver contentResolver) {
         String res = null;
         Uri uri = ContactsContract.RawContacts.CONTENT_URI;
